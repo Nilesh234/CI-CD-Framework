@@ -29,7 +29,7 @@ jobs:
 
   branch_tag_validation:
     needs: bootstrap
-    uses: ./.github/workflows/utils/branch-tag-validation.yml
+    uses: ./.github/workflows/:branch-tag-validation.yml
     with:
       allowed_branches: ${{ needs.bootstrap.outputs.allowed_branches }}
       semantic_versioning: ${{ needs.bootstrap.outputs.semantic_versioning }}
