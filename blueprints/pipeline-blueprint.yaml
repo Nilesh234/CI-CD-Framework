@@ -1,19 +1,27 @@
-technology: node
-build_type: ci
-deployment_method: cdk
-branching_strategy:
-  enforce: true
+technology: python
+build_type: full
+deployment: terraform
+
+branching:
+  strategy: semantic-versioning
   allowed_branches:
-    - dev
-    - staging
     - main
-  semantic_versioning: true
-ci_stages:
-  - lint
-  - static_analysis
-  - unit_tests
-  - security_scan
-  - package_artifact
-deployment:
-  environment: staging
-  auto_approve: true
+    - develop
+    - release/*
+    - hotfix/*
+
+stages:
+  lint: true
+  static_analysis: true
+  unit_tests: true
+  integration_tests: true
+  security_scan: true
+  package_artifact: true
+  deploy: true
+
+deployment_target:
+  environment: dev   # dev, staging, production
+  cloud_provider: aws
+  region: us-east-1
+  service: lambda    # or ec2, ecs, eks
+  deployment_method: sam # terraform, cdk, cloudformation, sam

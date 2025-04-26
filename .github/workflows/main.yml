@@ -1,90 +1,77 @@
-name: CI/CD Pipeline
+name: Dynamic CI/CD Framework
 
 on:
   push:
-    branches:
-      - dev
-      - staging
-      - main
+    branches: [ "main", "dev", "staging" ]
+    tags: 
+      - "v*.*.*"
   pull_request:
-    branches:
-      - dev
-      - staging
-      - main
+    branches: [ "main", "dev", "staging" ]
 
 jobs:
-  bootstrap:
+  generate-ci-cd:
+    name: Generate CI/CD Stages
     runs-on: ubuntu-latest
-    outputs:
-      technology: ${{ steps.set_technology.outputs.technology }}
-      deployment_method: ${{ steps.set_deployment_method.outputs.method }}
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
 
-      - name: Run branch validation
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install jq
+        run: sudo apt-get install -y jq
+
+      - name: Parse Blueprint and Generate Stages
         run: |
-          CURRENT_BRANCH=$(echo "${GITHUB_REF##*/}")
-          ALLOWED_BRANCHES="dev,staging,main"
-          IFS=',' read -ra ALLOWED <<< "$ALLOWED_BRANCHES"
-          FOUND=false
-          for branch in "${ALLOWED[@]}"; do
-            if [[ "$branch" == "$CURRENT_BRANCH" ]]; then
-              FOUND=true
-              break
-            fi
-          done
-          if [[ "$FOUND" == "false" ]]; then
-            echo "❌ Branch $CURRENT_BRANCH is not allowed!"
+          python scripts/parse_blueprint.py
+
+      - name: Determine Branch and Tag Compliance
+        run: |
+          bash scripts/branch-tag-validator.sh
+
+      - name: Run Technology Specific CI
+        run: |
+          TECH=$(jq -r '.technology' blueprint.json)
+          echo "Technology Stack: $TECH"
+
+          if [[ "$TECH" == "java" ]]; then
+            bash scripts/java-ci.sh
+          elif [[ "$TECH" == "nodejs" ]]; then
+            bash scripts/node-ci.sh
+          elif [[ "$TECH" == "python" ]]; then
+            bash scripts/python-ci.sh
+          else
+            echo "Unsupported technology stack: $TECH"
             exit 1
           fi
-          echo "✅ Branch $CURRENT_BRANCH is valid."
-          
-      - name: Set technology
-        id: set_technology
-        run: |
-          echo "::set-output name=technology::node"  # Set this to your technology (node, python, etc.)
 
-      - name: Set deployment method
-        id: set_deployment_method
+      - name: Deploy to Target Environment
         run: |
-          echo "::set-output name=method::cdk"  # Set this to your deployment method (cdk, terraform, etc.)
+          DEPLOYMENT_TYPE=$(jq -r '.deployment_method' blueprint.json)
+          echo "Deployment Method: $DEPLOYMENT_TYPE"
 
-  ci:
-    needs: bootstrap
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
-
-      - name: Run Node CI pipeline
-        if: ${{ needs.bootstrap.outputs.technology == 'node' }}
-        run: |
-          echo "Running Node.js CI pipeline"
-          # Add steps for Node.js CI here (e.g., install dependencies, lint, test, etc.)
-      
-      - name: Run Python CI pipeline
-        if: ${{ needs.bootstrap.outputs.technology == 'python' }}
-        run: |
-          echo "Running Python CI pipeline"
-          # Add steps for Python CI here (e.g., install dependencies, lint, test, etc.)
-
-      - name: Run Java CI pipeline
-        if: ${{ needs.bootstrap.outputs.technology == 'java' }}
-        run: |
-          echo "Running Java CI pipeline"
-          # Add steps for Java CI here (e.g., install dependencies, lint, test, etc.)
-
-  deploy:
-    needs: ci
-    runs-on: ubuntu-latest
-    steps:
-      - name: Deploy using appropriate method
-        run: |
-          if [ "${{ needs.bootstrap.outputs.deployment_method }}" == "cdk" ]; then
-            echo "Deploying using CDK"
-            # Add your CDK deployment commands here
-          elif [ "${{ needs.bootstrap.outputs.deployment_method }}" == "terraform" ]; then
-            echo "Deploying using Terraform"
-            # Add your Terraform deployment commands here
+          if [[ "$DEPLOYMENT_TYPE" == "terraform" ]]; then
+            cd deploy/terraform
+            terraform init
+            terraform apply -auto-approve
+          elif [[ "$DEPLOYMENT_TYPE" == "sam" ]]; then
+            cd deploy/sam
+            sam build
+            sam deploy --guided
+          elif [[ "$DEPLOYMENT_TYPE" == "cdk" ]]; then
+            cd deploy/cdk
+            npm install
+            npx cdk deploy --all --require-approval never
+          else
+            echo "Unsupported deployment method: $DEPLOYMENT_TYPE"
+            exit 1
           fi
