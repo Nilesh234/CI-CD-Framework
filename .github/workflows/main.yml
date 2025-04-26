@@ -23,20 +23,32 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Run branch validation
-        uses: ./.github/workflows/validate-branch.yml
-        with:
-          allowed_branches: "dev,staging,main"
-          semantic_versioning: "true"
-
+        run: |
+          CURRENT_BRANCH=$(echo "${GITHUB_REF##*/}")
+          ALLOWED_BRANCHES="dev,staging,main"
+          IFS=',' read -ra ALLOWED <<< "$ALLOWED_BRANCHES"
+          FOUND=false
+          for branch in "${ALLOWED[@]}"; do
+            if [[ "$branch" == "$CURRENT_BRANCH" ]]; then
+              FOUND=true
+              break
+            fi
+          done
+          if [[ "$FOUND" == "false" ]]; then
+            echo "❌ Branch $CURRENT_BRANCH is not allowed!"
+            exit 1
+          fi
+          echo "✅ Branch $CURRENT_BRANCH is valid."
+          
       - name: Set technology
         id: set_technology
         run: |
-          echo "::set-output name=technology::node"  # You can dynamically change this for different tech (e.g., node, python, etc.)
+          echo "::set-output name=technology::node"  # Set this to your technology (node, python, etc.)
 
       - name: Set deployment method
         id: set_deployment_method
         run: |
-          echo "::set-output name=method::cdk"  # Similarly, set deployment method here (cdk, terraform, etc.)
+          echo "::set-output name=method::cdk"  # Set this to your deployment method (cdk, terraform, etc.)
 
   ci:
     needs: bootstrap
