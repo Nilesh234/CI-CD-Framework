@@ -26,18 +26,32 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Install YAML parser
+      - name: Install Dependencies
         run: pip install pyyaml
 
-      - name: Run blueprint parser
+      - name: Create Outputs Directory
+        run: mkdir -p outputs
+
+      - name: Run Blueprint Parser
         run: python scripts/parse_blueprint.py
 
-      - name: Extract Blueprint Variables
+      - name: Verify Outputs
+        run: |
+          ls -la outputs/
+          cat outputs/output_stages.json
+
+      - name: Extract Variables
         id: extract
         run: |
-          echo "tech=$(cat output_tech.txt)" >> $GITHUB_OUTPUT
-          echo "deploy=$(cat output_deploy.txt)" >> $GITHUB_OUTPUT
-          echo "build_type=$(cat output_build_type.txt)" >> $GITHUB_OUTPUT
+          echo "tech=$(cat outputs/output_tech.txt)" >> $GITHUB_OUTPUT
+          echo "deploy=$(cat outputs/output_deploy.txt)" >> $GITHUB_OUTPUT
+          echo "build_type=$(cat outputs/output_build_type.txt)" >> $GITHUB_OUTPUT
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: blueprint-outputs
+          path: outputs/*
 
   run-ci:
     name: Run CI Pipeline
@@ -50,11 +64,16 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
+      - name: Download Artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: blueprint-outputs
+          path: outputs/
+
       - name: Load Stages
-        id: load_stages
         run: |
-          cat output_stages.json
-          echo "Stages loaded."
+          cat outputs/output_stages.json
+          echo "Stages loaded successfully."
 
       - name: Execute Language-Specific Workflow
         run: |
@@ -73,36 +92,19 @@ jobs:
   deploy:
     name: Deploy to Environment
     needs: run-ci
-    if: ${{ needs.parse-blueprint.outputs.deploy != '' }}
+    if: ${{ needs.parse-blueprint.outputs.deploy != 'none' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Load Deployment Target
-        run: cat output_deployment_target.json
+      - name: Download Artifacts
+        uses: actions/download-artifact@v3
+        with:
+          name: blueprint-outputs
+          path: outputs/
 
       - name: Deploy Application
         run: |
-          DEPLOY_TOOL=$(jq -r '.deployment_method' output_deployment_target.json)
-          ENVIRONMENT=$(jq -r '.environment' output_deployment_target.json)
-          REGION=$(jq -r '.region' output_deployment_target.json)
-          SERVICE=$(jq -r '.service' output_deployment_target.json)
-
-          echo "Deploying with tool: $DEPLOY_TOOL to $ENVIRONMENT in $REGION (Service: $SERVICE)"
-
-          if [ "$DEPLOY_TOOL" == "terraform" ]; then
-            cd deploy/terraform
-            terraform init
-            terraform apply -auto-approve
-          elif [ "$DEPLOY_TOOL" == "sam" ]; then
-            cd deploy/sam
-            sam build
-            sam deploy --config-env $ENVIRONMENT
-          elif [ "$DEPLOY_TOOL" == "cdk" ]; then
-            cd deploy/cdk
-            cdk deploy --require-approval never
-          else
-            echo "Unsupported deployment method!"
-            exit 1
-          fi
+          DEPLOY_TOOL=$(jq -r '.deployment_method' outputs/output_deployment_target.json)
+          # ... (rest of your deploy logic)

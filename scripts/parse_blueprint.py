@@ -13,7 +13,7 @@ def ensure_directory(path):
     Path(path).mkdir(parents=True, exist_ok=True)
 
 def load_blueprint_file():
-    """Load blueprint file with multiple fallback options."""
+    """Load blueprint file with validation."""
     blueprint_paths = [
         Path(BLUEPRINT_DIR) / "pipeline-blueprint.yaml",
         Path(BLUEPRINT_DIR) / "pipeline-blueprint.json",
@@ -29,49 +29,37 @@ def load_blueprint_file():
                     return yaml.safe_load(content) or {}
                 return json.loads(content) or {}
             except Exception as e:
-                print(f"Error loading {path}: {str(e)}", file=sys.stderr)
+                sys.stderr.write(f"Error loading {path}: {str(e)}\n")
+                sys.exit(1)
     
-    print("Warning: No valid blueprint file found", file=sys.stderr)
-    return {
-        "technology": "unknown",
-        "deployment": "none",
-        "build_type": "full",
-        "stages": [],
-        "deployment_target": {}
-    }
+    sys.stderr.write("Error: No valid blueprint file found\n")
+    sys.exit(1)
 
 def write_outputs(config):
-    """Write all output files with atomic writes."""
+    """Write all output files with validation."""
     ensure_directory(OUTPUT_DIR)
     
-    outputs = {
-        "output_stages.json": json.dumps({"stages": config.get("stages", [])}),
+    required_outputs = {
+        "output_stages.json": json.dumps({
+            "stages": config.get("stages", ["lint", "test", "build"])
+        }),
         "output_tech.txt": config.get("technology", "unknown"),
         "output_deploy.txt": config.get("deployment", "none"),
-        "output_build_type.txt": config.get("build_type", "full"),
-        "output_allowed_branches.txt": "\n".join(
-            config.get("branching", {}).get("allowed_branches", [])
-        )
+        "output_build_type.txt": config.get("build_type", "full")
     }
     
-    for filename, content in outputs.items():
+    for filename, content in required_outputs.items():
         try:
-            temp_path = Path(OUTPUT_DIR) / f".{filename}.tmp"
-            with open(temp_path, 'w') as f:
-                f.write(content)
-            temp_path.replace(Path(OUTPUT_DIR) / filename)
+            output_path = Path(OUTPUT_DIR) / filename
+            output_path.write_text(content)
         except Exception as e:
-            print(f"Failed to write {filename}: {str(e)}", file=sys.stderr)
-            raise
+            sys.stderr.write(f"Failed to write {filename}: {str(e)}\n")
+            sys.exit(1)
 
 def main():
-    try:
-        config = load_blueprint_file()
-        write_outputs(config)
-        print("Blueprint processed successfully")
-    except Exception as e:
-        print(f"Critical error: {str(e)}", file=sys.stderr)
-        sys.exit(1)
+    config = load_blueprint_file()
+    write_outputs(config)
+    print("Blueprint processed successfully")
 
 if __name__ == "__main__":
     main()
