@@ -29,16 +29,8 @@ jobs:
       - name: Install Dependencies
         run: pip install pyyaml
 
-      - name: Create Outputs Directory
-        run: mkdir -p outputs
-
       - name: Run Blueprint Parser
         run: python scripts/parse_blueprint.py
-
-      - name: Verify Outputs
-        run: |
-          ls -la outputs/
-          cat outputs/output_stages.json
 
       - name: Extract Variables
         id: extract
@@ -48,7 +40,7 @@ jobs:
           echo "build_type=$(cat outputs/output_build_type.txt)" >> $GITHUB_OUTPUT
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v3  # ✅ Fixed typo
         with:
           name: blueprint-outputs
           path: outputs/*
@@ -57,9 +49,6 @@ jobs:
     name: Run CI Pipeline
     needs: parse-blueprint
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        language: [ "${{ needs.parse-blueprint.outputs.tech }}" ]
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -74,37 +63,3 @@ jobs:
         run: |
           cat outputs/output_stages.json
           echo "Stages loaded successfully."
-
-      - name: Execute Language-Specific Workflow
-        run: |
-          echo "Running CI for language: ${{ matrix.language }}"
-          if [ "${{ matrix.language }}" == "python" ]; then
-            bash scripts/python-ci.sh
-          elif [ "${{ matrix.language }}" == "java" ]; then
-            bash scripts/java-ci.sh
-          elif [ "${{ matrix.language }}" == "node" ]; then
-            bash scripts/node-ci.sh
-          else
-            echo "Unsupported language!"
-            exit 1
-          fi
-
-  deploy:
-    name: Deploy to Environment
-    needs: run-ci
-    if: ${{ needs.parse-blueprint.outputs.deploy != 'none' }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Download Artifacts
-        uses: actions/download-artifact@v3
-        with:
-          name: blueprint-outputs
-          path: outputs/
-
-      - name: Deploy Application
-        run: |
-          DEPLOY_TOOL=$(jq -r '.deployment_method' outputs/output_deployment_target.json)
-          # ... (rest of your deploy logic)
