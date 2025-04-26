@@ -2,39 +2,18 @@ name: Java CI Workflow
 
 on:
   workflow_call:
-    inputs:
-      build_type:
-        required: true
-        type: string
-      deployment_method:
-        required: true
-        type: string
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up JDK
+      - name: Set up Java
         uses: actions/setup-java@v4
         with:
-          java-version: '11'
+          distribution: 'temurin'
+          java-version: '17'
 
-      - name: Install Dependencies
-        run: mvn install
-
-      - name: Run Lint
-        if: inputs.build_type == 'ci'
-        run: mvn checkstyle:check
-
-      - name: Run Tests
-        if: inputs.build_type == 'ci'
-        run: mvn test
-
-      - name: Package Artifact
-        run: mvn package
-        if: inputs.build_type == 'ci'
-
-      - name: Deploy
-        run: echo "Deploying using ${{ inputs.deployment_method }}"
+      - run: mvn clean install --file apps/java-app/pom.xml

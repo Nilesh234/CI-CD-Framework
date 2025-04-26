@@ -1,43 +1,36 @@
-name: CI/CD Framework Dispatcher
+name: Bootstrap Pipeline
 
 on:
   push:
-    branches: ["**"]
+    branches:
+      - '**'
   pull_request:
-    branches: ["**"]
 
 jobs:
   bootstrap:
     runs-on: ubuntu-latest
     outputs:
       technology: ${{ steps.parse.outputs.technology }}
-      build_type: ${{ steps.parse.outputs.build_type }}
-      deployment_method: ${{ steps.parse.outputs.deployment_method }}
-      allowed_branches: ${{ steps.parse.outputs.allowed_branches }}
-      semantic_versioning: ${{ steps.parse.outputs.semantic_versioning }}
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq yq
 
       - name: Parse Blueprint
         id: parse
         run: |
-          pip install pyyaml
-          python scripts/parse_blueprint.py
-        env:
-          BLUEPRINT_PATH: "blueprints/pipeline-blueprint.yaml"
+          bash utils/parse-blueprint.sh
 
-  branch_tag_validation:
+  validate_branch:
     needs: bootstrap
-    uses: ./.github/workflows/:branch-tag-validation.yml
-    with:
-      allowed_branches: ${{ needs.bootstrap.outputs.allowed_branches }}
-      semantic_versioning: ${{ needs.bootstrap.outputs.semantic_versioning }}
+    uses: ./.github/workflows/validate-branch.yml
+    secrets: inherit
 
-  run_ci_cd:
-    needs: [bootstrap, branch_tag_validation]
-    if: success()
+  ci_pipeline:
+    needs: bootstrap
     uses: ./.github/workflows/${{ needs.bootstrap.outputs.technology }}-ci.yml
-    with:
-      build_type: ${{ needs.bootstrap.outputs.build_type }}
-      deployment_method: ${{ needs.bootstrap.outputs.deployment_method }}
+    secrets: inherit
