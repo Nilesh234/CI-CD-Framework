@@ -1,36 +1,78 @@
-name: Bootstrap Pipeline
+name: CI/CD Pipeline
 
 on:
   push:
     branches:
-      - '**'
+      - dev
+      - staging
+      - main
   pull_request:
+    branches:
+      - dev
+      - staging
+      - main
 
 jobs:
   bootstrap:
     runs-on: ubuntu-latest
     outputs:
-      technology: ${{ steps.parse.outputs.technology }}
+      technology: ${{ steps.set_technology.outputs.technology }}
+      deployment_method: ${{ steps.set_deployment_method.outputs.method }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v2
 
-      - name: Setup Tools
+      - name: Run branch validation
+        uses: ./.github/workflows/validate-branch.yml
+        with:
+          allowed_branches: "dev,staging,main"
+          semantic_versioning: "true"
+
+      - name: Set technology
+        id: set_technology
         run: |
-          sudo apt-get update
-          sudo apt-get install -y jq yq
+          echo "::set-output name=technology::node"  # You can dynamically change this for different tech (e.g., node, python, etc.)
 
-      - name: Parse Blueprint
-        id: parse
+      - name: Set deployment method
+        id: set_deployment_method
         run: |
-          bash utils/parse-blueprint.sh
+          echo "::set-output name=method::cdk"  # Similarly, set deployment method here (cdk, terraform, etc.)
 
-  validate_branch:
+  ci:
     needs: bootstrap
-    uses: ./.github/workflows/validate-branch.yml
-    secrets: inherit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
 
-  ci_pipeline:
-    needs: bootstrap
-    uses: ./.github/workflows/${{ needs.bootstrap.outputs.technology }}-ci.yml
-    secrets: inherit
+      - name: Run Node CI pipeline
+        if: ${{ needs.bootstrap.outputs.technology == 'node' }}
+        run: |
+          echo "Running Node.js CI pipeline"
+          # Add steps for Node.js CI here (e.g., install dependencies, lint, test, etc.)
+      
+      - name: Run Python CI pipeline
+        if: ${{ needs.bootstrap.outputs.technology == 'python' }}
+        run: |
+          echo "Running Python CI pipeline"
+          # Add steps for Python CI here (e.g., install dependencies, lint, test, etc.)
+
+      - name: Run Java CI pipeline
+        if: ${{ needs.bootstrap.outputs.technology == 'java' }}
+        run: |
+          echo "Running Java CI pipeline"
+          # Add steps for Java CI here (e.g., install dependencies, lint, test, etc.)
+
+  deploy:
+    needs: ci
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy using appropriate method
+        run: |
+          if [ "${{ needs.bootstrap.outputs.deployment_method }}" == "cdk" ]; then
+            echo "Deploying using CDK"
+            # Add your CDK deployment commands here
+          elif [ "${{ needs.bootstrap.outputs.deployment_method }}" == "terraform" ]; then
+            echo "Deploying using Terraform"
+            # Add your Terraform deployment commands here
+          fi
