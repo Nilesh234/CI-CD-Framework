@@ -37,7 +37,7 @@ jobs:
   run_ci_cd:
     needs: [bootstrap, branch_tag_validation]
     if: success()
-    uses: ./.github/workflows/ci/${{ needs.bootstrap.outputs.technology }}-ci.yml
+    uses: ./.github/workflows/${{ needs.bootstrap.outputs.technology }}-ci.yml
     with:
       build_type: ${{ needs.bootstrap.outputs.build_type }}
       deployment_method: ${{ needs.bootstrap.outputs.deployment_method }}
