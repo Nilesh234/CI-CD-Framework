@@ -27,21 +27,22 @@ jobs:
 
       - name: Parse Blueprint
         run: |
-          set -e
           echo "Running Blueprint Parser..."
-          python3 scripts/parse_blueprint.py
-          echo "Blueprint parsed successfully!"
-
-      - name: Load or Generate Stages
-        run: |
-          if [ -f output_stages.json ]; then
-            echo "output_stages.json found."
-            cat output_stages.json
+          if python3 scripts/parse_blueprint.py; then
+            echo "Blueprint parsed successfully!"
           else
-            echo "output_stages.json not found. Creating default..."
+            echo "parse_blueprint.py failed. Creating empty output_stages.json"
             echo '{}' > output_stages.json
-            cat output_stages.json
           fi
+
+      - name: Load Stages
+        run: |
+          if [ ! -f output_stages.json ]; then
+            echo "output_stages.json still missing! Creating empty file."
+            echo '{}' > output_stages.json
+          fi
+          echo "output_stages.json content:"
+          cat output_stages.json
 
       - name: Run Tests
         run: |
@@ -49,7 +50,7 @@ jobs:
           python3 -m unittest discover python-app/
           echo "Tests completed."
 
-      - name: Upload output_stages.json (Optional)
+      - name: Upload output_stages.json
         if: always()
         uses: actions/upload-artifact@v3
         with:
