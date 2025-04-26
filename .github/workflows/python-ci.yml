@@ -21,10 +21,14 @@ jobs:
       - name: Run Tests
         run: pytest apps/python-app/
 
-      - name: Load Stages (optional)
+      - name: Load or Generate Stages
         run: |
           if [ -f output_stages.json ]; then
+            echo "Found output_stages.json. Loading..."
             cat output_stages.json
           else
-            echo "Warning: output_stages.json not found. Skipping..."
+            echo "output_stages.json not found. Generating default file..."
+            echo '{}' > output_stages.json
+            echo "Created empty output_stages.json"
           fi
+      
