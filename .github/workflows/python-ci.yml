@@ -15,5 +15,16 @@ jobs:
         with:
           python-version: '3.10'
 
-      - run: pip install -r apps/python-app/requirements.txt
-      - run: pytest apps/python-app/
+      - name: Install Dependencies
+        run: pip install -r apps/python-app/requirements.txt
+
+      - name: Run Tests
+        run: pytest apps/python-app/
+
+      - name: Load Stages (optional)
+        run: |
+          if [ -f output_stages.json ]; then
+            cat output_stages.json
+          else
+            echo "Warning: output_stages.json not found. Skipping..."
+          fi
