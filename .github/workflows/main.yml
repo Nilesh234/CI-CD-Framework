@@ -1,0 +1,43 @@
+name: CI/CD Framework Dispatcher
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    outputs:
+      technology: ${{ steps.parse.outputs.technology }}
+      build_type: ${{ steps.parse.outputs.build_type }}
+      deployment_method: ${{ steps.parse.outputs.deployment_method }}
+      allowed_branches: ${{ steps.parse.outputs.allowed_branches }}
+      semantic_versioning: ${{ steps.parse.outputs.semantic_versioning }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Parse Blueprint
+        id: parse
+        run: |
+          pip install pyyaml
+          python scripts/parse_blueprint.py
+        env:
+          BLUEPRINT_PATH: "blueprints/pipeline-blueprint.yaml"
+
+  branch_tag_validation:
+    needs: bootstrap
+    uses: ./.github/workflows/utils/branch-tag-validation.yml
+    with:
+      allowed_branches: ${{ needs.bootstrap.outputs.allowed_branches }}
+      semantic_versioning: ${{ needs.bootstrap.outputs.semantic_versioning }}
+
+  run_ci_cd:
+    needs: [bootstrap, branch_tag_validation]
+    if: success()
+    uses: ./.github/workflows/ci/${{ needs.bootstrap.outputs.technology }}-ci.yml
+    with:
+      build_type: ${{ needs.bootstrap.outputs.build_type }}
+      deployment_method: ${{ needs.bootstrap.outputs.deployment_method }}

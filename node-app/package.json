@@ -1,0 +1,9 @@
+{
+  "name": "node-app",
+  "version": "1.0.0",
+  "scripts": {
+    "lint": "echo 'Running linter'",
+    "test": "echo 'Running unit tests'"
+  },
+  "dependencies": {}
+}

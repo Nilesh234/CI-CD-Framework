@@ -1,0 +1,25 @@
+{
+  "technology": "node",
+  "build_type": "ci",
+  "deployment_method": "cdk",
+  "branching_strategy": {
+    "enforce": true,
+    "allowed_branches": [
+      "dev",
+      "staging",
+      "main"
+    ],
+    "semantic_versioning": true
+  },
+  "ci_stages": [
+    "lint",
+    "static_analysis",
+    "unit_tests",
+    "security_scan",
+    "package_artifact"
+  ],
+  "deployment": {
+    "environment": "staging",
+    "auto_approve": true
+  }
+}

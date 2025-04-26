@@ -1,0 +1,42 @@
+name: Node.js CI Workflow
+
+on:
+  workflow_call:
+    inputs:
+      build_type:
+        required: true
+        type: string
+      deployment_method:
+        required: true
+        type: string
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install Dependencies
+        run: npm install
+
+      - name: Run Lint
+        if: inputs.build_type == 'ci'
+        run: npm run lint
+
+      - name: Run Tests
+        if: inputs.build_type == 'ci'
+        run: npm test
+
+      - name: Package Artifact
+        run: |
+          mkdir -p dist
+          tar -czvf dist/node-app.tar.gz ./
+        if: inputs.build_type == 'ci'
+
+      - name: Deploy
+        run: echo "Deploying using ${{ inputs.deployment_method }}"

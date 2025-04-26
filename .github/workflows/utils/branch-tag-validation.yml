@@ -1,0 +1,40 @@
+name: Branch/Tag Validation
+
+on:
+  workflow_call:
+    inputs:
+      allowed_branches:
+        required: true
+        type: string
+      semantic_versioning:
+        required: true
+        type: string
+
+jobs:
+  validate_branch_tag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate Branch Name
+        run: |
+          echo "Allowed Branches: ${{ inputs.allowed_branches }}"
+          CURRENT_BRANCH=$(echo "${GITHUB_REF##*/}")
+
+          if [[ ! ",${{ inputs.allowed_branches }}," =~ ",${CURRENT_BRANCH}," ]]; then
+            echo "❌ Branch $CURRENT_BRANCH is not allowed!"
+            exit 1
+          fi
+          echo "✅ Branch $CURRENT_BRANCH is valid."
+
+      - name: Validate Semantic Versioning Tag
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          TAG=$(echo "${GITHUB_REF##*/}")
+
+          if [[ "${{ inputs.semantic_versioning }}" == "true" ]]; then
+            if [[ ! $TAG =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              echo "❌ Tag $TAG does not follow semantic versioning!"
+              exit 1
+            fi
+            echo "✅ Tag $TAG follows semantic versioning."
+          else
+            echo "ℹ️ Semantic versioning validation skipped."

@@ -1,0 +1,43 @@
+name: Python CI Workflow
+
+on:
+  workflow_call:
+    inputs:
+      build_type:
+        required: true
+        type: string
+      deployment_method:
+        required: true
+        type: string
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run Lint
+        if: inputs.build_type == 'ci'
+        run: flake8 .
+
+      - name: Run Tests
+        if: inputs.build_type == 'ci'
+        run: pytest
+
+      - name: Package Artifact
+        run: |
+          python setup.py sdist bdist_wheel
+          mkdir -p dist
+          cp dist/* dist/
+        if: inputs.build_type == 'ci'
+
+      - name: Deploy
+        run: echo "Deploying using ${{ inputs.deployment_method }}"
