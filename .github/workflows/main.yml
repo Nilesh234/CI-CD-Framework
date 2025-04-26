@@ -2,64 +2,62 @@ name: CI/CD Pipeline Framework
 
 on:
   push:
-    branches:
-      - main
-      - develop
-      - release/*
-      - hotfix/*
+    branches: [main, develop, release/*, hotfix/*]
   pull_request:
 
 jobs:
   parse-blueprint:
-    name: Parse Blueprint
     runs-on: ubuntu-latest
     outputs:
       tech: ${{ steps.extract.outputs.tech }}
       deploy: ${{ steps.extract.outputs.deploy }}
       build_type: ${{ steps.extract.outputs.build_type }}
+    
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.x'
 
-      - name: Install Dependencies
-        run: pip install pyyaml
+      - run: pip install pyyaml
 
-      - name: Run Blueprint Parser
+      - run: mkdir -p outputs
+
+      - name: Parse blueprint
         run: python scripts/parse_blueprint.py
 
-      - name: Extract Variables
+      - name: Verify outputs
+        run: |
+          ls -la outputs/
+          [ -f outputs/output_stages.json ] || exit 1
+
+      - name: Set outputs
         id: extract
         run: |
           echo "tech=$(cat outputs/output_tech.txt)" >> $GITHUB_OUTPUT
           echo "deploy=$(cat outputs/output_deploy.txt)" >> $GITHUB_OUTPUT
           echo "build_type=$(cat outputs/output_build_type.txt)" >> $GITHUB_OUTPUT
 
-      - name: Upload Artifacts
-        uses: actions/upload-artifact@v3  # ✅ Fixed typo
+      - uses: actions/upload-artifact@v4
         with:
-          name: blueprint-outputs
-          path: outputs/*
+          name: pipeline-artifacts
+          path: |
+            outputs/output_*.txt
+            outputs/output_stages.json
+          retention-days: 1
 
   run-ci:
-    name: Run CI Pipeline
     needs: parse-blueprint
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Download Artifacts
-        uses: actions/download-artifact@v3
+      - uses: actions/download-artifact@v4
         with:
-          name: blueprint-outputs
+          name: pipeline-artifacts
           path: outputs/
 
-      - name: Load Stages
-        run: |
+      - run: |
+          echo "Loaded stages:"
           cat outputs/output_stages.json
-          echo "Stages loaded successfully."
