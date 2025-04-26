@@ -1,25 +1,36 @@
-name: Python CI Workflow
+name: Python CI Pipeline
 
 on:
-  workflow_call:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
-  build:
+  run-ci:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v3
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v4
         with:
-          python-version: '3.10'
+          python-version: '3.x'
 
       - name: Install Dependencies
-        run: pip install -r apps/python-app/requirements.txt
+        run: |
+          pip install -r python-app/requirements.txt
 
-      - name: Run Tests
-        run: pytest apps/python-app/
+      - name: Parse Blueprint
+        run: |
+          set -e
+          echo "Running Blueprint Parser..."
+          python3 scripts/parse_blueprint.py
+          echo "Blueprint parsed successfully!"
 
       - name: Load or Generate Stages
         run: |
@@ -31,5 +42,16 @@ jobs:
             echo '{}' > output_stages.json
             cat output_stages.json
           fi
-      
-      
+
+      - name: Run Tests
+        run: |
+          echo "Running Python tests..."
+          python3 -m unittest discover python-app/
+          echo "Tests completed."
+
+      - name: Upload output_stages.json (Optional)
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: output_stages
+          path: output_stages.json
