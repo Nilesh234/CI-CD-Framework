@@ -1,81 +1,108 @@
-name: Dynamic CI/CD Framework
+name: CI/CD Pipeline Framework
 
 on:
   push:
-    branches: [ "main", "dev", "staging" ]
-    tags: 
-      - "v*.*.*"
+    branches:
+      - main
+      - develop
+      - release/*
+      - hotfix/*
   pull_request:
-    branches: [ "main", "dev", "staging" ]
 
 jobs:
-  generate-ci-cd:
-    name: Generate CI/CD Stages
+  parse-blueprint:
+    name: Parse Blueprint
     runs-on: ubuntu-latest
-
+    outputs:
+      tech: ${{ steps.extract.outputs.tech }}
+      deploy: ${{ steps.extract.outputs.deploy }}
+      build_type: ${{ steps.extract.outputs.build_type }}
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-
-      - name: Setup Python
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-      - name: Install dependencies
+          python-version: '3.x'
+
+      - name: Install YAML parser
+        run: pip install pyyaml
+
+      - name: Run blueprint parser
+        run: python scripts/parse_blueprint.py
+
+      - name: Extract Blueprint Variables
+        id: extract
         run: |
-          python -m pip install --upgrade pip
-          pip install pyyaml  # Ensure PyYAML is installed
+          echo "tech=$(cat output_tech.txt)" >> $GITHUB_OUTPUT
+          echo "deploy=$(cat output_deploy.txt)" >> $GITHUB_OUTPUT
+          echo "build_type=$(cat output_build_type.txt)" >> $GITHUB_OUTPUT
 
-      - name: Install jq
-        run: sudo apt-get install -y jq
+  run-ci:
+    name: Run CI Pipeline
+    needs: parse-blueprint
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        language: [ "${{ needs.parse-blueprint.outputs.tech }}" ]
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-      - name: Parse Blueprint and Generate Stages
+      - name: Load Stages
+        id: load_stages
         run: |
-          python scripts/parse_blueprint.py
+          cat output_stages.json
+          echo "Stages loaded."
 
-      - name: Determine Branch and Tag Compliance
+      - name: Execute Language-Specific Workflow
         run: |
-          bash scripts/branch-tag-validator.sh
-
-      - name: Run Technology Specific CI
-        run: |
-          TECH=$(jq -r '.technology' blueprint.json)
-          echo "Technology Stack: $TECH"
-
-          if [[ "$TECH" == "java" ]]; then
-            bash scripts/java-ci.sh
-          elif [[ "$TECH" == "nodejs" ]]; then
-            bash scripts/node-ci.sh
-          elif [[ "$TECH" == "python" ]]; then
+          echo "Running CI for language: ${{ matrix.language }}"
+          if [ "${{ matrix.language }}" == "python" ]; then
             bash scripts/python-ci.sh
+          elif [ "${{ matrix.language }}" == "java" ]; then
+            bash scripts/java-ci.sh
+          elif [ "${{ matrix.language }}" == "node" ]; then
+            bash scripts/node-ci.sh
           else
-            echo "Unsupported technology stack: $TECH"
+            echo "Unsupported language!"
             exit 1
           fi
 
-      - name: Deploy to Target Environment
-        run: |
-          DEPLOYMENT_TYPE=$(jq -r '.deployment_method' blueprint.json)
-          echo "Deployment Method: $DEPLOYMENT_TYPE"
+  deploy:
+    name: Deploy to Environment
+    needs: run-ci
+    if: ${{ needs.parse-blueprint.outputs.deploy != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-          if [[ "$DEPLOYMENT_TYPE" == "terraform" ]]; then
+      - name: Load Deployment Target
+        run: cat output_deployment_target.json
+
+      - name: Deploy Application
+        run: |
+          DEPLOY_TOOL=$(jq -r '.deployment_method' output_deployment_target.json)
+          ENVIRONMENT=$(jq -r '.environment' output_deployment_target.json)
+          REGION=$(jq -r '.region' output_deployment_target.json)
+          SERVICE=$(jq -r '.service' output_deployment_target.json)
+
+          echo "Deploying with tool: $DEPLOY_TOOL to $ENVIRONMENT in $REGION (Service: $SERVICE)"
+
+          if [ "$DEPLOY_TOOL" == "terraform" ]; then
             cd deploy/terraform
             terraform init
             terraform apply -auto-approve
-          elif [[ "$DEPLOYMENT_TYPE" == "sam" ]]; then
+          elif [ "$DEPLOY_TOOL" == "sam" ]; then
             cd deploy/sam
             sam build
-            sam deploy --guided
-          elif [[ "$DEPLOYMENT_TYPE" == "cdk" ]]; then
+            sam deploy --config-env $ENVIRONMENT
+          elif [ "$DEPLOY_TOOL" == "cdk" ]; then
             cd deploy/cdk
-            npm install
-            npx cdk deploy --all --require-approval never
+            cdk deploy --require-approval never
           else
-            echo "Unsupported deployment method: $DEPLOYMENT_TYPE"
+            echo "Unsupported deployment method!"
             exit 1
           fi
