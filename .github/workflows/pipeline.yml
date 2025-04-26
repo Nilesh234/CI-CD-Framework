@@ -1,0 +1,40 @@
+name: Dynamic CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - "**"
+  pull_request:
+    branches:
+      - "**"
+
+jobs:
+  parse-blueprint:
+    runs-on: ubuntu-latest
+    outputs:
+      tech_stack: ${{ steps.parse.outputs.tech_stack }}
+      build_type: ${{ steps.parse.outputs.build_type }}
+      deploy_method: ${{ steps.parse.outputs.deploy_method }}
+      branch_strategy: ${{ steps.parse.outputs.branch_strategy }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Run Blueprint Parser
+        uses: ./.github/actions/parse-blueprint
+
+  build:
+    needs: parse-blueprint
+    uses: ./.github/templates/build/build-${{ needs.parse-blueprint.outputs.tech_stack }}.yml
+
+  lint:
+    needs: parse-blueprint
+    uses: ./.github/templates/lint/lint-${{ needs.parse-blueprint.outputs.tech_stack }}.yml
+
+  test:
+    needs: parse-blueprint
+    uses: ./.github/templates/test/test-${{ needs.parse-blueprint.outputs.tech_stack }}.yml
+
+  deploy:
+    needs: [build, test]
+    uses: ./.github/templates/deploy/deploy-${{ needs.parse-blueprint.outputs.deploy_method }}.yml
